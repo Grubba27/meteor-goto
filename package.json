@@ -1,0 +1,104 @@
+{
+  "name": "meteor-goto",
+  "displayName": "Meteor Go-to-Definition",
+  "description": "Cmd+Click on Meteor method/publication names to navigate to their source definition",
+  "version": "0.1.0",
+  "publisher": "meteor",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "meteor",
+    "go-to-definition",
+    "methods",
+    "publications"
+  ],
+  "activationEvents": [
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescriptreact"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "meteor-explorer",
+          "title": "Meteor",
+          "icon": "$(rocket)"
+        }
+      ]
+    },
+    "views": {
+      "meteor-explorer": [
+        {
+          "id": "meteorSymbols",
+          "name": "Methods & Publications"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "meteor-goto.refreshSymbols",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "meteor-goto.refreshSymbols",
+          "when": "view == meteorSymbols",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Meteor",
+      "properties": {
+        "meteor-goto.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable debug logging in the Meteor output channel."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.0.0",
+    "@types/node": "^18.0.0",
+    "@types/vscode": "^1.75.0",
+    "@vscode/vsce": "^3.0.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "typescript": "^5.0.0"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/__tests__/**/*.test.ts"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "/out/"
+    ],
+    "modulePathIgnorePatterns": [
+      "<rootDir>/out/"
+    ],
+    "moduleNameMapper": {
+      "^vscode$": "<rootDir>/src/__mocks__/vscode.ts"
+    }
+  }
+}
