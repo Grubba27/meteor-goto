@@ -33,6 +33,21 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   context.subscriptions.push(treeView);
 
+  // Open a file at a specific range, reusing the active editor pane
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "meteor-goto.openLocation",
+      async (uri: vscode.Uri, selection: vscode.Range) => {
+        await vscode.window.showTextDocument(uri, {
+          selection,
+          viewColumn: vscode.ViewColumn.Active,
+          preview: false,
+          preserveFocus: false,
+        });
+      }
+    )
+  );
+
   // Refresh command
   context.subscriptions.push(
     vscode.commands.registerCommand("meteor-goto.refreshSymbols", () => {

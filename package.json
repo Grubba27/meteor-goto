@@ -2,7 +2,7 @@
   "name": "meteor-goto",
   "displayName": "Meteor Go-to-Definition",
   "description": "Cmd+Click on Meteor method/publication names to navigate to their source definition",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "grubba",
   "engines": {
     "vscode": "^1.75.0"
@@ -50,6 +50,11 @@
         "command": "meteor-goto.refreshSymbols",
         "title": "Refresh",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "meteor-goto.openLocation",
+        "title": "Open Location",
+        "enablement": "never"
       }
     ],
     "menus": {

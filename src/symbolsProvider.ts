@@ -52,18 +52,16 @@ export class SymbolItem extends vscode.TreeItem {
     this.description = `line ${loc.line + 1}`;
     this.tooltip = `${vscode.workspace.asRelativePath(uri)}:${loc.line + 1}`;
     this.command = {
-      command: "vscode.open",
+      command: "meteor-goto.openLocation",
       title: "Open",
       arguments: [
         uri,
-        {
-          selection: new vscode.Range(
-            loc.line,
-            loc.character,
-            loc.line,
-            loc.character + name.length
-          ),
-        } satisfies vscode.TextDocumentShowOptions,
+        new vscode.Range(
+          loc.line,
+          loc.character,
+          loc.line,
+          loc.character + name.length
+        ),
       ],
     };
     this.contextValue = "symbol";
