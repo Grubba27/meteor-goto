@@ -4,6 +4,8 @@ import {
   matchPublishInText,
   offsetToLineCol,
   isInsideMeteorMethods,
+  isRegisteredAsExternalMethod,
+  matchExternalFunctionInText,
 } from "../logic";
 
 // ---------------------------------------------------------------------------
@@ -249,5 +251,124 @@ describe("extractCallNameFromLine", () => {
       makeLookback(line, quoteCol)
     );
     expect(result).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isRegisteredAsExternalMethod
+// ---------------------------------------------------------------------------
+
+describe("isRegisteredAsExternalMethod", () => {
+  it("returns true for shorthand reference in Meteor.methods", () => {
+    const text = [
+      `async function insertTask() {}`,
+      `Meteor.methods({ insertTask });`,
+    ].join("\n");
+    expect(isRegisteredAsExternalMethod(text, "insertTask")).toBe(true);
+  });
+
+  it("returns true for shorthand in multi-name Meteor.methods", () => {
+    const text = [
+      `async function insertTask() {}`,
+      `async function removeTask() {}`,
+      `Meteor.methods({ insertTask, removeTask });`,
+    ].join("\n");
+    expect(isRegisteredAsExternalMethod(text, "removeTask")).toBe(true);
+  });
+
+  it("returns false for inline method definition (has parens)", () => {
+    const text = `Meteor.methods({ insertTask() {} });`;
+    expect(isRegisteredAsExternalMethod(text, "insertTask")).toBe(false);
+  });
+
+  it("returns false for property-style method definition (has colon)", () => {
+    const text = `Meteor.methods({ insertTask: async function() {} });`;
+    expect(isRegisteredAsExternalMethod(text, "insertTask")).toBe(false);
+  });
+
+  it("returns false when no Meteor.methods in file", () => {
+    const text = `async function insertTask() {}`;
+    expect(isRegisteredAsExternalMethod(text, "insertTask")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// matchExternalFunctionInText
+// ---------------------------------------------------------------------------
+
+describe("matchExternalFunctionInText", () => {
+  it("finds async function declaration", () => {
+    const text = `async function insertTask({ description }) {\n  return 1;\n}`;
+    const results = matchExternalFunctionInText(text, "insertTask");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].line).toBe(0);
+  });
+
+  it("finds regular function declaration", () => {
+    const text = `function removeTask({ taskId }) {\n  return Tasks.removeAsync(taskId);\n}`;
+    const results = matchExternalFunctionInText(text, "removeTask");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].line).toBe(0);
+  });
+
+  it("finds const arrow function", () => {
+    const text = `const toggleTaskDone = async ({ taskId }) => {\n  return 1;\n};`;
+    const results = matchExternalFunctionInText(text, "toggleTaskDone");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].line).toBe(0);
+  });
+
+  it("finds const function expression", () => {
+    const text = `const insertTask = function({ description }) {\n  return 1;\n};`;
+    const results = matchExternalFunctionInText(text, "insertTask");
+    expect(results.length).toBeGreaterThan(0);
+  });
+
+  it("returns empty for unrelated function name", () => {
+    const text = `async function insertTask() {}`;
+    expect(matchExternalFunctionInText(text, "removeTask")).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// matchMethodsInText — external function pattern (end-to-end)
+// ---------------------------------------------------------------------------
+
+describe("matchMethodsInText — external function registration", () => {
+  const sampleText = [
+    `async function insertTask({ description }) {`,
+    `  return Tasks.insertAsync({ description });`,
+    `}`,
+    `async function removeTask({ taskId }) {`,
+    `  return Tasks.removeAsync(taskId);`,
+    `}`,
+    `async function toggleTaskDone({ taskId }) {`,
+    `  return Tasks.updateAsync(taskId, {});`,
+    `}`,
+    `Meteor.methods({ insertTask, removeTask, toggleTaskDone });`,
+  ].join("\n");
+
+  it("navigates to async function definition via shorthand registration", () => {
+    const results = matchMethodsInText(sampleText, "insertTask");
+    expect(results.length).toBeGreaterThan(0);
+    // Should point to the function definition on line 0, not the Meteor.methods line
+    expect(results[0].line).toBe(0);
+  });
+
+  it("finds second external method", () => {
+    const results = matchMethodsInText(sampleText, "removeTask");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].line).toBe(3);
+  });
+
+  it("finds third external method", () => {
+    const results = matchMethodsInText(sampleText, "toggleTaskDone");
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0].line).toBe(6);
+  });
+
+  it("returns empty for a name not registered in Meteor.methods", () => {
+    const results = matchMethodsInText(sampleText, "notAMethod");
+    expect(results).toHaveLength(0);
   });
 });

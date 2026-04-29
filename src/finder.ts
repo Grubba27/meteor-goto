@@ -1,5 +1,10 @@
 import * as vscode from "vscode";
-import { matchMethodsInText, matchPublishInText } from "./logic";
+import {
+  matchMethodsInText,
+  matchPublishInText,
+  isRegisteredAsExternalMethod,
+  matchExternalFunctionInText,
+} from "./logic";
 import { log } from "./logger";
 
 // ---------------------------------------------------------------------------
@@ -66,6 +71,9 @@ export async function findMethodDefinition(
 
   const locations: vscode.Location[] = [];
 
+  // Collect all file contents up-front so we can do a second pass if needed.
+  const fileTexts: Array<{ uri: vscode.Uri; text: string }> = [];
+
   await Promise.all(
     files.map(async (uri) => {
       let text: string;
@@ -75,6 +83,7 @@ export async function findMethodDefinition(
         return;
       }
 
+      fileTexts.push({ uri, text });
       const hits = matchMethodsInText(text, name);
       if (hits.length > 0) {
         log(`  Found ${hits.length} match(es) in ${uri.fsPath}`);
@@ -86,6 +95,35 @@ export async function findMethodDefinition(
       }
     })
   );
+
+  // Cross-file external function support:
+  // If no inline (or same-file external) definitions were found, check whether
+  // `name` is registered as a shorthand in any Meteor.methods block across the
+  // workspace, then find its function definition in any other file.
+  if (locations.length === 0) {
+    const registeredInAnyFile = fileTexts.some(({ text }) =>
+      isRegisteredAsExternalMethod(text, name)
+    );
+    if (registeredInAnyFile) {
+      log(
+        `"${name}" is registered as external method — scanning for function definitions…`
+      );
+      for (const { uri, text } of fileTexts) {
+        const hits = matchExternalFunctionInText(text, name);
+        if (hits.length > 0) {
+          log(`  Found ${hits.length} definition(s) in ${uri.fsPath}`);
+          for (const lc of hits) {
+            locations.push(
+              new vscode.Location(
+                uri,
+                new vscode.Position(lc.line, lc.character)
+              )
+            );
+          }
+        }
+      }
+    }
+  }
 
   log(`Total results for method "${name}": ${locations.length}`);
   methodCache.set(name, { locations });

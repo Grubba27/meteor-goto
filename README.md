@@ -165,6 +165,13 @@ npm run watch     # watch mode during development
 
 Press **F5** inside VS Code with this folder open to launch the Extension Development Host and test live.
 
+## Todo
+
+- [X] Page for where the methods/publications are being created
+  -[ ] Be able to add extra methods to the tree view (e.g. createMethod)
+- [ ] Page for where the methods/publications are being called
+  - Being able to add extra methods to the tree view (e.g. useSubscribe)
+
 ---
 
 ## License

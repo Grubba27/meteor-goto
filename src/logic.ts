@@ -77,17 +77,41 @@ export function buildMethodPatterns(name: string): RegExp[] {
   ];
 }
 
+// Keywords to skip when scanning for method/publish names
+const SKIP_KEYWORDS = new Set([
+  "return",
+  "if",
+  "else",
+  "const",
+  "let",
+  "var",
+  "function",
+  "async",
+  "await",
+  "new",
+  "this",
+  "true",
+  "false",
+  "null",
+  "undefined",
+  "typeof",
+  "instanceof",
+]);
+
 /**
- * Walk backwards from `matchIndex` in `text` to verify the match is inside
- * a `Meteor.methods({...})` block.
+ * Returns the brace depth of `matchIndex` relative to the nearest preceding
+ * `Meteor.methods` call, or -1 if not inside any Meteor.methods block.
+ *
+ * depth == 1 → directly inside the methods object literal (a property key)
+ * depth >  1 → inside a method body or nested structure
  */
-export function isInsideMeteorMethods(
+export function depthInMeteorMethods(
   text: string,
   matchIndex: number
-): boolean {
+): number {
   const lookback = text.slice(Math.max(0, matchIndex - 8000), matchIndex);
   const methodsIdx = lookback.lastIndexOf("Meteor.methods");
-  if (methodsIdx < 0) return false;
+  if (methodsIdx < 0) return -1;
 
   const between = lookback.slice(methodsIdx);
   let depth = 0;
@@ -101,10 +125,21 @@ export function isInsideMeteorMethods(
       depth++;
     } else if (ch === "}") {
       depth--;
-      if (depth < 0) return false;
+      if (depth < 0) return -1;
     }
   }
-  return depth > 0;
+  return depth;
+}
+
+/**
+ * Walk backwards from `matchIndex` in `text` to verify the match is inside
+ * a `Meteor.methods({...})` block.
+ */
+export function isInsideMeteorMethods(
+  text: string,
+  matchIndex: number
+): boolean {
+  return depthInMeteorMethods(text, matchIndex) > 0;
 }
 
 /**
@@ -126,6 +161,12 @@ export function matchMethodsInText(text: string, name: string): LineCol[] {
       const keyOffset = findKeyStart(match[0], name, match.index);
       results.push(offsetToLineCol(text, keyOffset));
     }
+  }
+
+  // Also handle: functions defined externally and registered via shorthand
+  // e.g.  async function insertTask() {}  →  Meteor.methods({ insertTask })
+  if (isRegisteredAsExternalMethod(text, name)) {
+    results.push(...matchExternalFunctionInText(text, name));
   }
 
   return results;
@@ -272,24 +313,36 @@ export function matchAllMethodsInText(text: string): LineCol[] {
   while ((match = ALL_KEY_RE.exec(text)) !== null) {
     const name = match[2];
     // Skip common JS keywords / identifiers that aren't method names
-    if (
-      [
-        "return",
-        "if",
-        "else",
-        "const",
-        "let",
-        "var",
-        "function",
-        "async",
-      ].includes(name)
-    )
-      continue;
+    if (SKIP_KEYWORDS.has(name)) continue;
     const afterMatch = match.index + match[0].length;
     if (!isInsideMeteorMethods(text, afterMatch)) continue;
 
     const nameOffset = findKeyStart(match[0], name, match.index);
     results.push({ ...offsetToLineCol(text, nameOffset), name });
+  }
+
+  // Also scan for shorthand external references: Meteor.methods({ insertTask, removeTask })
+  // where the value is NOT followed by `:` or `(` (i.e. shorthand property).
+  const externalRe = /(?:^|[,{\n\r])\s*([\w][\w$]*)\s*(?=[,}\n\r])/gm;
+  const seenExternal = new Set<string>();
+  externalRe.lastIndex = 0;
+  while ((match = externalRe.exec(text)) !== null) {
+    const name = match[1];
+    if (SKIP_KEYWORDS.has(name) || seenExternal.has(name)) continue;
+    const afterMatch = match.index + match[0].length;
+    // Must be at depth exactly 1 — a direct property of the methods object,
+    // not a variable reference inside a method body.
+    if (depthInMeteorMethods(text, afterMatch) !== 1) continue;
+    seenExternal.add(name);
+    // Navigate to function definition in same file if available; otherwise
+    // use the reference position inside Meteor.methods so the entry still appears.
+    const defs = matchExternalFunctionInText(text, name);
+    if (defs.length > 0) {
+      for (const def of defs) results.push({ ...def, name });
+    } else {
+      const nameOffset = findKeyStart(match[0], name, match.index);
+      results.push({ ...offsetToLineCol(text, nameOffset), name });
+    }
   }
 
   return results;
@@ -359,5 +412,80 @@ export function matchAllPublishInText(text: string): LineCol[] {
     }
   }
 
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// External function registration support
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true if `name` appears as a **shorthand property reference** (no `:` or `(`)
+ * inside any `Meteor.methods({ ... })` block in `text`.
+ *
+ * This handles the pattern:
+ *   async function insertTask() { ... }
+ *   Meteor.methods({ insertTask, removeTask });
+ */
+export function isRegisteredAsExternalMethod(
+  text: string,
+  name: string
+): boolean {
+  if (!text.includes("Meteor.methods")) return false;
+  const esc = escapeRegex(name);
+  // Match the bare identifier not preceded by a quote (to avoid quoted property keys)
+  // and not followed by `:` or `(` (to distinguish from inline method definitions).
+  const re = new RegExp(
+    `(?:^|[,{\\s\\n\\r])${esc}(?=\\s*[,}\\n\\r])`,
+    "gm"
+  );
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    const afterMatch = match.index + match[0].length;
+    if (depthInMeteorMethods(text, afterMatch) === 1) return true;
+  }
+  return false;
+}
+
+/**
+ * Find all top-level function definitions for `name` in `text`.
+ * Matches:
+ *   - async function name(
+ *   - function name(
+ *   - export async function name(
+ *   - const/let/var name = ...  (covers arrow functions and function expressions)
+ */
+export function matchExternalFunctionInText(
+  text: string,
+  name: string
+): LineCol[] {
+  const esc = escapeRegex(name);
+  const patterns = [
+    // (export) async function name
+    new RegExp(
+      `(?:^|\\n)(?:export\\s+(?:default\\s+)?)?async\\s+function\\s+${esc}\\b`,
+      "gm"
+    ),
+    // (export) function name
+    new RegExp(
+      `(?:^|\\n)(?:export\\s+(?:default\\s+)?)?function\\s+${esc}\\b`,
+      "gm"
+    ),
+    // (export) const/let/var name =
+    new RegExp(
+      `(?:^|\\n)(?:export\\s+)?(?:const|let|var)\\s+${esc}\\s*=`,
+      "gm"
+    ),
+  ];
+
+  const results: LineCol[] = [];
+  for (const pattern of patterns) {
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) !== null) {
+      const keyOffset = findKeyStart(match[0], name, match.index);
+      results.push(offsetToLineCol(text, keyOffset));
+    }
+  }
   return results;
 }
