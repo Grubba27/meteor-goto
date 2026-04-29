@@ -6,7 +6,7 @@ Jump directly from a `Meteor.call` or `Meteor.subscribe` to the method or public
 
 No more grepping for method names or manually searching across files.
 
-![demo](./example.png)
+![demo](https://github.com/Grubba27/meteor-goto/blob/main/example.png)
 
 ---
 
