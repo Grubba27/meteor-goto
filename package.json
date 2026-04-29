@@ -3,7 +3,7 @@
   "displayName": "Meteor Go-to-Definition",
   "description": "Cmd+Click on Meteor method/publication names to navigate to their source definition",
   "version": "0.1.0",
-  "publisher": "meteor",
+  "publisher": "grubba",
   "engines": {
     "vscode": "^1.75.0"
   },
