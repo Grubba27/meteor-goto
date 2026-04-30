@@ -5,7 +5,6 @@
 Jump directly from a `Meteor.call` or `Meteor.subscribe` to the method or publication that handles it — with a single **Cmd+Click** (macOS) or **Ctrl+Click** (Windows/Linux), or by pressing **F12** (Go to Definition).
 
 No more grepping for method names or manually searching across files.
-
 ![demo](https://github.com/Grubba27/meteor-goto/blob/main/example.png)
 
 ---
