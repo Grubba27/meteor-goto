@@ -1,6 +1,6 @@
 # Meteor Go-to-Definition
 
-[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=meteor.meteor-goto)
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Marketplace-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=grubba.meteor-goto)
 
 Jump directly from a `Meteor.call` or `Meteor.subscribe` to the method or publication that handles it — with a single **Cmd+Click** (macOS) or **Ctrl+Click** (Windows/Linux), or by pressing **F12** (Go to Definition).
 
